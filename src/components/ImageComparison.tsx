@@ -8,10 +8,31 @@ interface ImageComparisonProps {
   uploadedImagePath?: string;
 }
 
+interface ParameterScores {
+  typography: number;
+  layoutAlignment: number;
+  visualStyling: number;
+  copy: number;
+}
+
+interface ParameterDetail {
+  score: number;
+  explanation: string;
+}
+
+interface ParameterAnalysis {
+  typography?: ParameterDetail;
+  layoutAlignment?: ParameterDetail;
+  visualStyling?: ParameterDetail;
+  copy?: ParameterDetail;
+}
+
 interface ComparisonResult {
   score: number;
   analysis: string;
   differences: string[];
+  parameters?: ParameterScores;
+  parameterAnalysis?: ParameterAnalysis;
 }
 
 const ImageComparison: React.FC<ImageComparisonProps> = ({
@@ -53,6 +74,7 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
       }
 
       const data = await response.json();
+      console.log('Comparison API response:', data);
       
       if (data.success && data.comparison) {
         setResult(data.comparison);
@@ -70,7 +92,33 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'green';
     if (score >= 60) return 'yellow';
+    if (score >= 40) return 'orange';
     return 'red';
+  };
+  
+  const renderParameterScore = (name: string, paramDetail: ParameterDetail | undefined) => {
+    if (!paramDetail) return null;
+    
+    return (
+      <div className="parameter-score" key={name}>
+        <div className="parameter-header">
+          <div className="parameter-name"><Text>{name}</Text></div>
+          <div className="parameter-value"><Text>{paramDetail.score}%</Text></div>
+        </div>
+        <div className="score-bar">
+          <div 
+            className="score-fill" 
+            style={{ 
+              width: `${paramDetail.score}%`, 
+              backgroundColor: getScoreColor(paramDetail.score) 
+            }}
+          />
+        </div>
+        {paramDetail.explanation && (
+          <div className="parameter-analysis"><Text>{paramDetail.explanation}</Text></div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -111,7 +159,8 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
       {result && (
         <div className="comparison-result">
           <div className="score-section">
-            <Text>Similarity Score: {result.score}%</Text>
+            <div className="overall-score-title"><Text>Overall Similarity Score</Text></div>
+            <div className="overall-score-value"><Text>{result.score}%</Text></div>
             <div className="score-bar">
               <div 
                 className="score-fill" 
@@ -123,14 +172,27 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
             </div>
           </div>
           
+          {result.parameterAnalysis && (
+            <div className="parameters-section">
+              <div className="parameters-title"><Text>Detailed Analysis</Text></div>
+              
+              <div className="parameters-grid">
+                {renderParameterScore('Typography', result.parameterAnalysis.typography)}
+                {renderParameterScore('Layout & Alignment', result.parameterAnalysis.layoutAlignment)}
+                {renderParameterScore('Visual Styling', result.parameterAnalysis.visualStyling)}
+                {renderParameterScore('Content/Copy', result.parameterAnalysis.copy)}
+              </div>
+            </div>
+          )}
+          
           <div className="analysis-section">
-            <Text>Analysis:</Text>
+            <div className="analysis-title"><Text>Overall Analysis</Text></div>
             <Text>{result.analysis}</Text>
           </div>
           
           {result.differences.length > 0 && (
             <div className="differences-section">
-              <Text>Key Differences:</Text>
+              <div className="differences-title"><Text>Key Differences</Text></div>
               <ul className="differences-list">
                 {result.differences.map((diff, index) => (
                   <li key={index}>

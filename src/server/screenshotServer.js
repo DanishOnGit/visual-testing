@@ -147,81 +147,71 @@ app.post("/api/upload", upload.single("image"), (req, res) => {
 // Image comparison endpoint
 app.post("/api/compare", async (req, res) => {
   const { screenshotPath, uploadedImagePath } = req.body;
+  
+  console.log('Compare API called with:', { screenshotPath, uploadedImagePath });
+  
   if (!screenshotPath || !uploadedImagePath) {
-    return res
-      .status(400)
-      .json({ error: "Both screenshot and uploaded image paths are required" });
+    return res.status(400).json({ error: 'Both screenshot and uploaded image paths are required' });
   }
-
+  
   // Convert relative paths to absolute if needed
-  // const fullScreenshotPath = screenshotPath;
-
-  // const fullUploadedImagePath = uploadedImagePath;
-  const fullScreenshotPath = screenshotPath.startsWith("/")
+  const fullScreenshotPath = screenshotPath.startsWith('/')
     ? screenshotPath
-    : path.join(__dirname, screenshotPath.slice(1));
-
-  const fullUploadedImagePath = uploadedImagePath.startsWith("/")
+    : path.join(__dirname, '..', '..', screenshotPath.slice(1));
+    
+  const fullUploadedImagePath = uploadedImagePath.startsWith('/')
     ? uploadedImagePath
-    : path.join(__dirname, uploadedImagePath.slice(1));
+    : path.join(__dirname, '..', '..', uploadedImagePath.slice(1));
+
+  console.log('Full paths:', { fullScreenshotPath, fullUploadedImagePath });
+
   try {
     // Check if files exist
     if (!fs.existsSync(fullScreenshotPath)) {
-      return res.status(404).json({ error: "Screenshot file not found" });
+      console.error('Screenshot file not found:', fullScreenshotPath);
+      return res.status(404).json({ error: 'Screenshot file not found' });
     }
-
+    
     if (!fs.existsSync(fullUploadedImagePath)) {
-      return res.status(404).json({ error: "Uploaded image file not found" });
+      console.error('Uploaded image file not found:', fullUploadedImagePath);
+      return res.status(404).json({ error: 'Uploaded image file not found' });
     }
-
+    
     // Read image files as base64
     const screenshotBuffer = await fs.promises.readFile(fullScreenshotPath);
-    const uploadedImageBuffer = await fs.promises.readFile(
-      fullUploadedImagePath
-    );
-
-    const screenshotBase64 = screenshotBuffer.toString("base64");
-    const uploadedImageBase64 = uploadedImageBuffer.toString("base64");
+    const uploadedImageBuffer = await fs.promises.readFile(fullUploadedImagePath);
+    
+    const screenshotBase64 = screenshotBuffer.toString('base64');
+    const uploadedImageBase64 = uploadedImageBuffer.toString('base64');
 
     // Log API settings
-    console.log("Using OpenAI API with:");
-    console.log(
-      "- API Key:",
-      process.env.VITE_OPENAI_API_KEY
-        ? "[Using VITE_OPENAI_API_KEY]"
-        : process.env.OPENAI_API_KEY
-        ? "[Using OPENAI_API_KEY]"
-        : "[No API Key found]"
-    );
-    console.log(
-      "- Base URL:",
-      process.env.VITE_OPENAI_BASE_URL || "[Default OpenAI URL]"
-    );
+    console.log('Using OpenAI API with:');
+    console.log('- API Key:', process.env.VITE_OPENAI_API_KEY ? '[Using VITE_OPENAI_API_KEY]' : (process.env.OPENAI_API_KEY ? '[Using OPENAI_API_KEY]' : '[No API Key found]'));
+    console.log('- Base URL:', process.env.VITE_OPENAI_BASE_URL || '[Default OpenAI URL]');
 
     // Send request to OpenAI
     const response = await openai.chat.completions.create({
-      model: "Proton",
+      model: 'Proton',
       messages: [
         {
-          role: "system",
-          content:
-            "You are a visual testing expert that compares website screenshots for UI/UX testing.",
+          role: 'system',
+          content: 'You are a visual testing expert that compares website screenshots for UI/UX testing.',
         },
         {
-          role: "user",
+          role: 'user',
           content: [
             {
-              type: "text",
-              text: "Compare these two images. The first is a reference screenshot and the second is a test image. Provide a similarity score from 0 to 100, where 100 means identical. Analyze layout differences, color variations, and missing elements. Return a JSON with: score (number), analysis (string), and differences (array of strings).",
+              type: 'text',
+              text: "Compare these two images. The first is a reference screenshot and the second is a test image. Provide a similarity score from 0 to 100, where 100 means identical. Analyze layout differences, color variations, and missing elements. Return a JSON with: score (number), analysis (string), and differences (array of strings). Additionally, evaluate and provide specific scores for these parameters in a 'parameterAnalysis' object with the following structure: { typography: { score: number, explanation: string }, layoutAlignment: { score: number, explanation: string }, visualStyling: { score: number, explanation: string }, copy: { score: number, explanation: string } }.",
             },
             {
-              type: "image_url",
+              type: 'image_url',
               image_url: {
                 url: `data:image/png;base64,${screenshotBase64}`,
               },
             },
             {
-              type: "image_url",
+              type: 'image_url',
               image_url: {
                 url: `data:image/png;base64,${uploadedImageBase64}`,
               },
@@ -231,26 +221,33 @@ app.post("/api/compare", async (req, res) => {
       ],
       max_tokens: 1000,
       temperature: 0.5,
-      response_format: { type: "json_object" },
+      response_format: { type: 'json_object' },
     });
 
     // Parse the response
-    const content = response.choices[0]?.message?.content || "";
+    const content = response.choices[0]?.message?.content || '';
+    console.log('OpenAI Response:', content);
     const result = JSON.parse(content);
 
     res.json({
       success: true,
       comparison: {
         score: result.score || 0,
-        analysis: result.analysis || "No analysis provided",
+        analysis: result.analysis || 'No analysis provided',
         differences: result.differences || [],
-      },
+        parameterAnalysis: result.parameterAnalysis || {
+          typography: { score: 0, explanation: "No typography analysis provided" },
+          layoutAlignment: { score: 0, explanation: "No layout analysis provided" },
+          visualStyling: { score: 0, explanation: "No visual styling analysis provided" },
+          copy: { score: 0, explanation: "No content/copy analysis provided" }
+        }
+      }
     });
   } catch (error) {
-    console.error("Error comparing images:", error);
+    console.error('Error comparing images:', error);
     res.status(500).json({
-      error: "Failed to compare images",
-      message: error.message,
+      error: 'Failed to compare images',
+      message: error.message
     });
   }
 });
