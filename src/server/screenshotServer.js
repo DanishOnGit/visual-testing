@@ -160,13 +160,13 @@ app.post("/api/compare", async (req, res) => {
   }
   
   // Convert relative paths to absolute if needed
-  const fullScreenshotPath = screenshotPath.startsWith('/')
-    ? screenshotPath
-    : path.join(__dirname, '..', '..', screenshotPath.slice(1));
+  const fullScreenshotPath = screenshotPath.startsWith('/') 
+  ? screenshotPath
+    : path.join(__dirname, '..', '..', screenshotPath.slice(1)) 
     
-  const fullUploadedImagePath = uploadedImagePath.startsWith('/')
-    ? uploadedImagePath
-    : path.join(__dirname, '..', '..', uploadedImagePath.slice(1));
+  const fullUploadedImagePath = uploadedImagePath.startsWith('/') 
+  ? uploadedImagePath
+  : path.join(__dirname, '..', '..', uploadedImagePath.slice(1)) 
 
   console.log('Full paths:', { fullScreenshotPath, fullUploadedImagePath });
 
@@ -207,7 +207,7 @@ app.post("/api/compare", async (req, res) => {
           content: [
             {
               type: 'text',
-              text: "Compare these two images. The first is a reference screenshot and the second is a test image. Provide a similarity score from 0 to 100, where 100 means identical. Analyze layout differences, color variations, and missing elements. Return a JSON with: score (number), analysis (string), and differences (array of strings). Additionally, evaluate and provide specific scores for these parameters in a 'parameterAnalysis' object with the following structure: { typography: { score: number, explanation: string }, layoutAlignment: { score: number, explanation: string }, visualStyling: { score: number, explanation: string }, copy: { score: number, explanation: string } }.",
+              text: "Compare these two images. The first is a reference screenshot and the second is a test image. Provide a similarity score from 0 to 100, where 100 means identical. Analyze layout differences, color variations, and missing elements. Return a JSON with: score (number), analysis (string), and differences (array of strings). Additionally, evaluate and provide specific scores for these parameters: typography (0-100), layoutAlignment (0-100), visualStyling (0-100), copy (0-100). For each parameter, include a brief explanation in a 'parameterAnalysis' object.",
             },
             {
               type: 'image_url',
@@ -240,12 +240,13 @@ app.post("/api/compare", async (req, res) => {
         score: result.score || 0,
         analysis: result.analysis || 'No analysis provided',
         differences: result.differences || [],
-        parameterAnalysis: result.parameterAnalysis || {
-          typography: { score: 0, explanation: "No typography analysis provided" },
-          layoutAlignment: { score: 0, explanation: "No layout analysis provided" },
-          visualStyling: { score: 0, explanation: "No visual styling analysis provided" },
-          copy: { score: 0, explanation: "No content/copy analysis provided" }
-        }
+        parameters: {
+          typography: result.typography || 0,
+          layoutAlignment: result.layoutAlignment || 0,
+          visualStyling: result.visualStyling || 0,
+          copy: result.copy || 0
+        },
+        parameterAnalysis: result.parameterAnalysis || {}
       }
     });
   } catch (error) {

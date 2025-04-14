@@ -15,16 +15,11 @@ interface ParameterScores {
   copy: number;
 }
 
-interface ParameterDetail {
-  score: number;
-  explanation: string;
-}
-
 interface ParameterAnalysis {
-  typography?: ParameterDetail;
-  layoutAlignment?: ParameterDetail;
-  visualStyling?: ParameterDetail;
-  copy?: ParameterDetail;
+  typography?: string;
+  layoutAlignment?: string;
+  visualStyling?: string;
+  copy?: string;
 }
 
 interface ComparisonResult {
@@ -92,34 +87,29 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'green';
     if (score >= 60) return 'yellow';
-    if (score >= 40) return 'orange';
     return 'red';
   };
   
-  const renderParameterScore = (name: string, paramDetail: ParameterDetail | undefined) => {
-    if (!paramDetail) return null;
-    
-    return (
-      <div className="parameter-score" key={name}>
-        <div className="parameter-header">
-          <div className="parameter-name"><Text>{name}</Text></div>
-          <div className="parameter-value"><Text>{paramDetail.score}%</Text></div>
-        </div>
-        <div className="score-bar">
-          <div 
-            className="score-fill" 
-            style={{ 
-              width: `${paramDetail.score}%`, 
-              backgroundColor: getScoreColor(paramDetail.score) 
-            }}
-          />
-        </div>
-        {paramDetail.explanation && (
-          <div className="parameter-analysis"><Text>{paramDetail.explanation}</Text></div>
-        )}
+  const renderParameterScore = (name: string, score: number, analysis?: string) => (
+    <div className="parameter-score" key={name}>
+      <div className="parameter-header">
+        <div className="parameter-name"><Text>{name}</Text></div>
+        <div className="parameter-value"><Text>{score}%</Text></div>
       </div>
-    );
-  };
+      <div className="score-bar">
+        <div 
+          className="score-fill" 
+          style={{ 
+            width: `${score}%`, 
+            backgroundColor: getScoreColor(score) 
+          }}
+        />
+      </div>
+      {analysis && (
+        <div className="parameter-analysis"><Text>{analysis}</Text></div>
+      )}
+    </div>
+  );
 
   return (
     <Box>
@@ -172,15 +162,15 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
             </div>
           </div>
           
-          {result.parameterAnalysis && (
+          {result.parameters && (
             <div className="parameters-section">
               <div className="parameters-title"><Text>Detailed Analysis</Text></div>
               
               <div className="parameters-grid">
-                {renderParameterScore('Typography', result.parameterAnalysis.typography)}
-                {renderParameterScore('Layout & Alignment', result.parameterAnalysis.layoutAlignment)}
-                {renderParameterScore('Visual Styling', result.parameterAnalysis.visualStyling)}
-                {renderParameterScore('Content/Copy', result.parameterAnalysis.copy)}
+                {renderParameterScore('Typography', result.parameters.typography, result.parameterAnalysis?.typography)}
+                {renderParameterScore('Layout & Alignment', result.parameters.layoutAlignment, result.parameterAnalysis?.layoutAlignment)}
+                {renderParameterScore('Visual Styling', result.parameters.visualStyling, result.parameterAnalysis?.visualStyling)}
+                {renderParameterScore('Content/Copy', result.parameters.copy, result.parameterAnalysis?.copy)}
               </div>
             </div>
           )}

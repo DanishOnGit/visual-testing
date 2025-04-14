@@ -182,29 +182,6 @@
   transition: width 0.5s ease-in-out;
 }
 
-.score-fill[style*="green"] {
-  background-color: #4ade80 !important; /* Green */
-}
-
-.score-fill[style*="yellow"] {
-  background-color: #facc15 !important; /* Yellow */
-}
-
-.score-fill[style*="orange"] {
-  background-color: #fb923c !important; /* Orange */
-}
-
-.score-fill[style*="red"] {
-  background-color: #ef4444 !important; /* Red */
-}
-
-.parameter-analysis {
-  margin-top: 0.75rem;
-  font-size: 0.875rem;
-  color: #64748b;
-  text-align: left;
-}
-
 .analysis-section, .differences-section {
   margin-top: 1rem;
   text-align: left;
@@ -269,6 +246,12 @@
 .parameter-value {
   font-weight: 700;
   color: #1e40af;
+}
+
+.parameter-analysis {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  color: #64748b;
 }
 
 .overall-score-title {
