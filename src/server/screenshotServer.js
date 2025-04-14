@@ -102,7 +102,12 @@ app.post("/api/screenshot", async (req, res) => {
     // Take screenshot
     await page.screenshot({
       path: filePath,
-      fullPage,
+     clip:{
+      x: 0,
+      y: 0,
+      width: 1280,
+      height: 800
+     }
     });
 
     // Return success with file info
