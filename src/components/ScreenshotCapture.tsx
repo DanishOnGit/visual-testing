@@ -3,9 +3,18 @@ import { Box, Text, Button } from '@razorpay/blade/components';
 
 interface ScreenshotCaptureProps {
   url: string;
+  onCaptureComplete?: (result: { 
+    success: boolean; 
+    path: string; 
+    imageUrl: string;
+    message?: string;
+  }) => void;
 }
 
-const ScreenshotCapture: React.FC<ScreenshotCaptureProps> = ({ url }) => {
+const ScreenshotCapture: React.FC<ScreenshotCaptureProps> = ({ 
+  url,
+  onCaptureComplete
+}) => {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string; path?: string; imageUrl?: string }>({ 
     success: false, 
@@ -14,10 +23,14 @@ const ScreenshotCapture: React.FC<ScreenshotCaptureProps> = ({ url }) => {
 
   const captureScreenshot = async () => {
     if (!url) {
-      setResult({ 
+      const errorResult = { 
         success: false, 
-        message: 'Please enter a valid URL' 
-      });
+        message: 'Please enter a valid URL',
+        path: '',
+        imageUrl: ''
+      };
+      setResult(errorResult);
+      onCaptureComplete?.(errorResult);
       return;
     }
 
@@ -42,23 +55,42 @@ const ScreenshotCapture: React.FC<ScreenshotCaptureProps> = ({ url }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
+        const errorResult = {
+          success: false,
+          message: errorData.message || 'Failed to capture screenshot',
+          path: '',
+          imageUrl: ''
+        };
+        setResult(errorResult);
+        onCaptureComplete?.(errorResult);
         throw new Error(errorData.message || 'Failed to capture screenshot');
       }
 
       const data = await response.json();
       
-      setResult({
+      const successResult = {
         success: true,
         message: 'Screenshot captured successfully!',
         path: data.file.fullPath,
         imageUrl: `http://localhost:3001${data.file.path}`
-      });
+      };
+      
+      setResult(successResult);
+      
+      // Call the callback with the successful result
+      if (onCaptureComplete) {
+        onCaptureComplete(successResult);
+      }
     } catch (error) {
       console.error('Screenshot error:', error);
-      setResult({
+      const errorResult = {
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to capture screenshot'
-      });
+        message: error instanceof Error ? error.message : 'Failed to capture screenshot',
+        path: '',
+        imageUrl: ''
+      };
+      setResult(errorResult);
+      onCaptureComplete?.(errorResult);
     } finally {
       setIsLoading(false);
     }
