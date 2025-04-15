@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Text, Button, Modal, ModalBody } from '@razorpay/blade/components';
+import { Box, Text, Button, Modal, ModalBody, ModalHeader, Divider } from '@razorpay/blade/components';
+import ComparisonReport from './ComparisonReport';
 
 interface ImageComparisonProps {
   screenshotUrl?: string;
@@ -121,42 +122,57 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
   );
 
   return (
-    <Modal isOpen={imageComparisonOpen} onDismiss={() => setImageComparisonOpen(false)} size="medium">
+    <Modal
+      isOpen={imageComparisonOpen}
+      onDismiss={() => setImageComparisonOpen(false)}
+      size="medium"
+    >
+      <ModalHeader title="Compare Images" />
       <ModalBody>
-      <Text>Compare Images</Text>
+        <div className="comparison-images">
+          {screenshotUrl && uploadedImageUrl && (
+            <div className="image-grid">
+              <div className="image-item">
+                <Text>Screenshot</Text>
+                <img
+                  src={screenshotUrl}
+                  alt="Screenshot"
+                  className="comparison-image"
+                />
+              </div>
+              <div className="image-item">
+                <Text>Uploaded Image</Text>
+                <img
+                  src={uploadedImageUrl}
+                  alt="Uploaded"
+                  className="comparison-image"
+                />
+              </div>
+            </div>
+          )}
+        </div>
 
-      <div className="comparison-images">
-        {screenshotUrl && uploadedImageUrl && (
-          <div className="image-grid">
-            <div className="image-item">
-              <Text>Screenshot</Text>
-              <img src={screenshotUrl} alt="Screenshot" className="comparison-image" />
-            </div>
-            <div className="image-item">
-              <Text>Uploaded Image</Text>
-              <img src={uploadedImageUrl} alt="Uploaded" className="comparison-image" />
-            </div>
+        <Box padding={"spacing.5"} width="60%" margin="auto">
+          <Button
+            // display={'block'}
+            //   margin='auto'
+            isFullWidth
+            isLoading={isLoading}
+            onClick={compareImages}
+            isDisabled={isLoading || !screenshotPath || !uploadedImagePath}
+            variant="primary"
+          >
+            {isLoading ? "Comparing..." : "Compare Images"}
+          </Button>
+        </Box>
+
+        {error && (
+          <div className="comparison-error">
+            <Text>{error}</Text>
           </div>
         )}
-      </div>
 
-      <div className="comparison-action">
-        <Button
-          onClick={compareImages}
-          isDisabled={isLoading || !screenshotPath || !uploadedImagePath}
-          variant="primary"
-        >
-          {isLoading ? 'Comparing...' : 'Compare Images'}
-        </Button>
-      </div>
-
-      {error && (
-        <div className="comparison-error">
-          <Text>{error}</Text>
-        </div>
-      )}
-
-      {result && (
+        {/* {result && (
         <div className="comparison-result">
           <div className="score-section">
             <div className="overall-score-title"><Text>Overall Similarity Score</Text></div>
@@ -203,7 +219,19 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
             </div>
           )}
         </div>
-      )}
+      )} */}
+        <Divider height={"spacing.5"} />
+        {result && (
+          <Box padding={"spacing.5"}>
+            <ComparisonReport
+              score={result?.score || 0}
+              analysis={result?.analysis || ""}
+              differences={result?.differences || []}
+              parameters={result?.parameters}
+              parameterAnalysis={result?.parameterAnalysis}
+            />
+          </Box>
+        )}
       </ModalBody>
     </Modal>
   );

@@ -20,10 +20,12 @@ interface NewProjectInputProps {
     projectName:string;
     setProjectName: (name: string) => void;
     runTest: () => void;
+    isOpen: boolean;
+    setIsOpen: (isOpen: boolean) => void;
+    isRunningTest: boolean;
 }
 
-const NewProjectInput: React.FC<NewProjectInputProps> = ({ imageUrl,setImageUrl,handleFileChange,projectName,setProjectName,runTest   }) => {
-  const [isOpen, setIsOpen] = useState(true);
+const NewProjectInput: React.FC<NewProjectInputProps> = ({ isOpen, setIsOpen, imageUrl,setImageUrl,handleFileChange,projectName,setProjectName,runTest,isRunningTest   }) => {
 
   return (
     <Box>
@@ -74,8 +76,8 @@ const NewProjectInput: React.FC<NewProjectInputProps> = ({ imageUrl,setImageUrl,
           </Box>
         </ModalBody>
         <ModalFooter>
-          <Button onClick={runTest} variant="primary" size="large" isFullWidth>
-            Run Test
+          <Button isLoading={isRunningTest} onClick={runTest} variant="primary" size="large" isFullWidth isDisabled={isRunningTest}>
+            {isRunningTest ? 'Running Test...' : 'Run Test'}
           </Button>
         </ModalFooter>
       </Modal>

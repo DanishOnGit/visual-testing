@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
-import { Box, Text } from "@razorpay/blade/components";
+import {
+  Box,
+  Button,
+  Heading,
+  PlusIcon,
+  Text,
+} from "@razorpay/blade/components";
 import Input from "./components/Input";
 import ImageUpload from "./components/ImageUpload";
 import ScreenshotCapture from "./components/ScreenshotCapture";
@@ -17,6 +23,8 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imageComparisonOpen, setImageComparisonOpen] = useState(false);
+  const [showNewProjectInput, setShowNewProjectInput] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   // Add states for captured screenshot and uploaded image for comparison
   const [screenshot, setScreenshot] = useState<{
     path: string;
@@ -33,7 +41,7 @@ function App() {
     console.log("Uploaded image details:", uploadedImageDetails);
   }, [screenshot, uploadedImageDetails]);
 
-  const handleFileChange = (e: { name?: string; fileList: FileList []}) => {
+  const handleFileChange = (e: { name?: string; fileList: FileList[] }) => {
     console.log("File change event:", e);
     const file = e.fileList?.[0];
     if (!file) return;
@@ -175,55 +183,49 @@ function App() {
     }
   };
 
-  const runTest = async() => {
+  const runTest = async () => {
     console.log("Running test...");
-    try{
+    try {
+      setIsLoading(true);
       await captureScreenshot();
       setImageComparisonOpen(true);
-    }catch(error){
+    } catch (error) {
       console.error("Error running test:", error);
+    } finally {
+      setIsLoading(false);
     }
-    // handleImageUpload();
   };
 
   return (
     <div className="container">
-      <Text>Visual Testing Tool</Text>
-
-      <Box>
-        <div className="card">
-          <div className="form-group">
-            <Input
-              value={imageUrl}
-              onChange={setImageUrl}
-              label="Website URL"
-              placeholder="Enter a website URL to capture (e.g., https://example.com)"
-            />
-          </div>
-
-          <div className="form-group">
-            <ScreenshotCapture
-              url={imageUrl}
-              onCaptureComplete={handleScreenshotCapture}
-            />
-          </div>
-
-          <div className="form-group">
-            <ImageUpload
-              onImageUpload={handleImageUpload}
-              label="Or upload an image for comparison"
-            />
-          </div>
-        </div>
+      <Heading marginBottom={"spacing.5"} size="2xlarge" weight="semibold">
+        Got Something to Test?
+      </Heading>
+      <Text size="large">Create a new project to get started</Text>
+      <Box padding={"spacing.5"}>
+        <Button
+          icon={PlusIcon}
+          iconPosition="left"
+          variant="primary"
+          onClick={() => setShowNewProjectInput(true)}
+        >
+          New Project
+        </Button>
       </Box>
-      <NewProjectInput
-        imageUrl={imageUrl}
-        setImageUrl={setImageUrl}
-        handleFileChange={handleFileChange}
-        projectName={projectName}
-        setProjectName={setProjectName}
-        runTest={runTest}
-      />
+
+      {showNewProjectInput && (
+        <NewProjectInput
+         isRunningTest = {isLoading}
+          isOpen={showNewProjectInput}
+          setIsOpen={setShowNewProjectInput}
+          imageUrl={imageUrl}
+          setImageUrl={setImageUrl}
+          handleFileChange={handleFileChange}
+          projectName={projectName}
+          setProjectName={setProjectName}
+          runTest={runTest}
+        />
+      )}
       {screenshot && uploadedImageDetails && (
         <div className="form-group">
           <ImageComparison
@@ -236,23 +238,6 @@ function App() {
           />
         </div>
       )}
-      <div className="debug-info">
-        <p>Debug Info:</p>
-        <p>Screenshot captured: {screenshot ? "Yes" : "No"}</p>
-        <p>Image uploaded: {uploadedImageDetails ? "Yes" : "No"}</p>
-        <p>
-          Compare should show:{" "}
-          {screenshot && uploadedImageDetails ? "Yes" : "No"}
-        </p>
-      </div>
-
-      <Text>
-        {uploadedImage
-          ? `Selected file: ${uploadedImage.name} (${Math.round(
-              uploadedImage.size / 1024
-            )} KB)`
-          : "No file selected"}
-      </Text>
     </div>
   );
 }
