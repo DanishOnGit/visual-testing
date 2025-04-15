@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Box, Text, Button } from '@razorpay/blade/components';
+import { Box, Text, Button, Modal, ModalBody } from '@razorpay/blade/components';
 
 interface ImageComparisonProps {
   screenshotUrl?: string;
   screenshotPath?: string;
   uploadedImageUrl?: string;
   uploadedImagePath?: string;
+  imageComparisonOpen: boolean;
+  setImageComparisonOpen: (open: boolean) => void;
 }
 
 interface ParameterScores {
@@ -15,11 +17,15 @@ interface ParameterScores {
   copy: number;
 }
 
+interface ParameterAnalysisType{
+  score:number;
+  explanation:string;
+}
 interface ParameterAnalysis {
-  typography?: string;
-  layoutAlignment?: string;
-  visualStyling?: string;
-  copy?: string;
+  typography?: ParameterAnalysisType;
+  layoutAlignment?: ParameterAnalysisType;
+  visualStyling?: ParameterAnalysisType;
+  copy?: ParameterAnalysisType;
 }
 
 interface ComparisonResult {
@@ -35,6 +41,8 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
   screenshotPath,
   uploadedImageUrl,
   uploadedImagePath,
+  imageComparisonOpen,
+  setImageComparisonOpen,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ComparisonResult | null>(null);
@@ -52,6 +60,7 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
 
     try {
       // Call the comparison API
+        console.log({ screenshotPath, uploadedImagePath });
       const response = await fetch('http://localhost:3001/api/compare', {
         method: 'POST',
         headers: {
@@ -90,29 +99,30 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
     return 'red';
   };
   
-  const renderParameterScore = (name: string, score: number, analysis?: string) => (
+  const renderParameterScore = (name: string, score: number, analysis?: {score:number,explanation:string}) => (
     <div className="parameter-score" key={name}>
       <div className="parameter-header">
         <div className="parameter-name"><Text>{name}</Text></div>
-        <div className="parameter-value"><Text>{score}%</Text></div>
+        <div className="parameter-value"><Text>{analysis?.score}%</Text></div>
       </div>
       <div className="score-bar">
         <div 
           className="score-fill" 
           style={{ 
-            width: `${score}%`, 
-            backgroundColor: getScoreColor(score) 
+            width: `${analysis?.score}%`, 
+            backgroundColor: getScoreColor(analysis?.score || 0) 
           }}
         />
       </div>
       {analysis && (
-        <div className="parameter-analysis"><Text>{analysis}</Text></div>
+        <div className="parameter-analysis"><Text>{analysis.explanation}</Text></div>
       )}
     </div>
   );
 
   return (
-    <Box>
+    <Modal isOpen={imageComparisonOpen} onDismiss={() => setImageComparisonOpen(false)} size="medium">
+      <ModalBody>
       <Text>Compare Images</Text>
 
       <div className="comparison-images">
@@ -194,7 +204,8 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
           )}
         </div>
       )}
-    </Box>
+      </ModalBody>
+    </Modal>
   );
 };
 
