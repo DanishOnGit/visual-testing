@@ -48,8 +48,9 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ComparisonResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [modelType, setModelType] = useState<'openai' | 'gemini' | 'pixelmatch'>('openai');
+  const [modelType, setModelType] = useState<'openai' | 'gemini' | 'pixelmatch' | 'hybrid'>('openai');
   const [diffImage, setDiffImage] = useState<string | null>(null);
+  const [aiModel, setAiModel] = useState<'openai' | 'gemini'>('gemini');
 
   const compareImages = async () => {
     if (!screenshotPath || !uploadedImagePath) {
@@ -65,26 +66,35 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
     try {
       // Determine which endpoint to use based on model type
       let endpoint = 'http://localhost:3001/api/compare';
+      const body: {
+        screenshotPath: string;
+        uploadedImagePath: string;
+        threshold?: number;
+        aiModel?: 'openai' | 'gemini';
+      } = {
+        screenshotPath,
+        uploadedImagePath,
+      };
       
       if (modelType === 'gemini') {
         endpoint = 'http://localhost:3001/api/compare-with-gemini';
       } else if (modelType === 'pixelmatch') {
         endpoint = 'http://localhost:3001/api/compare-pixels';
+        body.threshold = 0.1;
+      } else if (modelType === 'hybrid') {
+        endpoint = 'http://localhost:3001/api/compare-hybrid';
+        body.aiModel = aiModel;
       }
       
       // Call the comparison API
-      console.log({ screenshotPath, uploadedImagePath });
+      console.log({ endpoint, ...body });
       
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          screenshotPath,
-          uploadedImagePath,
-          threshold: 0.1 // Only used for pixelmatch
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -194,7 +204,7 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
               isDisabled={isLoading || !screenshotPath || !uploadedImagePath}
               variant="primary"
             >
-              {isLoading ? 'Comparing...' : `Compare with ${modelType === 'openai' ? 'OpenAI' : modelType === 'gemini' ? 'Gemini' : 'Pixel Match'}`}
+              {isLoading ? 'Comparing...' : `Compare with ${modelType === 'openai' ? 'OpenAI' : modelType === 'gemini' ? 'Gemini' : modelType === 'hybrid' ? 'Hybrid (AI + Pixel)' : 'Pixel Match'}`}
             </Button>
           </Box>
           
@@ -224,7 +234,37 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
             >
               Pixel Match
             </Button>
+            <Button 
+              onClick={() => setModelType('hybrid')}
+              variant={modelType === 'hybrid' ? "primary" : "secondary"}
+              size="small"
+              isDisabled={isLoading}
+            >
+              Hybrid
+            </Button>
           </Box>
+
+          {modelType === 'hybrid' && (
+            <Box display="flex" gap="spacing.3" marginTop="spacing.3">
+              <Text size="small" weight="medium">AI Model for Hybrid:</Text>
+              <Button 
+                onClick={() => setAiModel('openai')}
+                variant={aiModel === 'openai' ? "primary" : "secondary"}
+                size="small"
+                isDisabled={isLoading}
+              >
+                OpenAI
+              </Button>
+              <Button 
+                onClick={() => setAiModel('gemini')}
+                variant={aiModel === 'gemini' ? "primary" : "secondary"}
+                size="small"
+                isDisabled={isLoading}
+              >
+                Gemini
+              </Button>
+            </Box>
+          )}
         </Box>
 
         {error && (

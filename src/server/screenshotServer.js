@@ -562,6 +562,155 @@ app.post("/api/compare-pixels", async (req, res) => {
   }
 });
 
+// Hybrid comparison endpoint using both pixel matching and AI
+app.post("/api/compare-hybrid", async (req, res) => {
+  const { screenshotPath, uploadedImagePath, aiModel = 'gemini' } = req.body;
+  
+  console.log('Hybrid Compare API called with:', { screenshotPath, uploadedImagePath, aiModel });
+  
+  if (!screenshotPath || !uploadedImagePath) {
+    return res.status(400).json({ error: 'Both screenshot and uploaded image paths are required' });
+  }
+  
+  // Convert relative paths to absolute if needed
+  const fullScreenshotPath = screenshotPath.startsWith('/') 
+    ? screenshotPath
+    : path.join(__dirname, '..', '..', screenshotPath.slice(1));
+    
+  const fullUploadedImagePath = uploadedImagePath.startsWith('/') 
+    ? uploadedImagePath
+    : path.join(__dirname, '..', '..', uploadedImagePath.slice(1));
+
+  console.log('Full paths:', { fullScreenshotPath, fullUploadedImagePath });
+
+  try {
+    // Check if files exist
+    if (!fs.existsSync(fullScreenshotPath)) {
+      console.error('Screenshot file not found:', fullScreenshotPath);
+      return res.status(404).json({ error: 'Screenshot file not found' });
+    }
+    
+    if (!fs.existsSync(fullUploadedImagePath)) {
+      console.error('Uploaded image file not found:', fullUploadedImagePath);
+      return res.status(404).json({ error: 'Uploaded image file not found' });
+    }
+    
+    // Step 1: Run pixel comparison for layout and alignment
+    const pixelComparisonResponse = await fetch('http://localhost:3001/api/compare-pixels', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        screenshotPath,
+        uploadedImagePath,
+        threshold: 0.1
+      }),
+    });
+    
+    if (!pixelComparisonResponse.ok) {
+      const errorData = await pixelComparisonResponse.json();
+      throw new Error(errorData.message || 'Failed to compare images with pixel matching');
+    }
+    
+    const pixelData = await pixelComparisonResponse.json();
+    console.log('Pixel comparison results:', pixelData);
+    
+    // Step 2: Run AI comparison for colors, copy and typography
+    const aiEndpoint = aiModel === 'gemini' ? 
+      'http://localhost:3001/api/compare-with-gemini' : 
+      'http://localhost:3001/api/compare';
+      
+    const aiComparisonResponse = await fetch(aiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        screenshotPath,
+        uploadedImagePath
+      }),
+    });
+    
+    if (!aiComparisonResponse.ok) {
+      const errorData = await aiComparisonResponse.json();
+      throw new Error(errorData.message || `Failed to compare images with ${aiModel}`);
+    }
+    
+    const aiData = await aiComparisonResponse.json();
+    console.log(`${aiModel.toUpperCase()} comparison results:`, aiData);
+    
+    // Step 3: Merge the results, prioritizing pixelmatch for layout and AI for typography and colors
+    const pixelResults = pixelData.comparison;
+    const aiResults = aiData.comparison;
+    
+    // Calculate hybrid score (weighted average)
+    const layoutWeight = 0.4;
+    const typographyWeight = 0.2;
+    const colorsWeight = 0.2;
+    const copyWeight = 0.2;
+    
+    const hybridScore = (
+      (pixelResults.parameters.layoutAlignment * layoutWeight) +
+      (aiResults.parameters.typography * typographyWeight) +
+      (aiResults.parameters.visualStyling * colorsWeight) +
+      (aiResults.parameters.copy * copyWeight)
+    );
+    
+    // Combine differences from both analyses
+    const allDifferences = [
+      ...new Set([
+        ...pixelResults.differences,
+        ...aiResults.differences
+      ])
+    ];
+    
+    // Create combined analysis
+    const hybridAnalysis = `
+      Layout Analysis: ${pixelResults.analysis}
+      
+      AI Analysis: ${aiResults.analysis}
+      
+      Combined Score: ${Math.round(hybridScore)}% match. This score gives more weight to layout and alignment 
+      while utilizing AI to better evaluate typography, visual styling, and content.
+    `;
+    
+    // Create the combined response
+    const hybridResult = {
+      score: Math.round(hybridScore),
+      analysis: hybridAnalysis.trim(),
+      differences: allDifferences,
+      parameters: {
+        // Use pixel comparison for layout
+        layoutAlignment: pixelResults.parameters.layoutAlignment,
+        // Use AI for typography, styling and copy
+        typography: aiResults.parameters.typography,
+        visualStyling: aiResults.parameters.visualStyling,
+        copy: aiResults.parameters.copy
+      },
+      parameterAnalysis: {
+        layoutAlignment: pixelResults.parameterAnalysis.layoutAlignment,
+        typography: aiResults.parameterAnalysis.typography, 
+        visualStyling: aiResults.parameterAnalysis.visualStyling,
+        copy: aiResults.parameterAnalysis.copy
+      },
+      // Include the diff image from pixel comparison
+      diffImage: pixelResults.diffImage
+    };
+    
+    res.json({
+      success: true,
+      comparison: hybridResult
+    });
+  } catch (err) {
+    console.error('Hybrid comparison error:', err);
+    res.status(500).json({
+      error: 'Failed to perform hybrid comparison',
+      message: err.message
+    });
+  }
+});
+
 // Start server
 app.listen(port, () => {
   console.log(`Screenshot server running on port ${port}`);
