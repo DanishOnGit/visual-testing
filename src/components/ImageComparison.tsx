@@ -48,6 +48,8 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ComparisonResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [modelType, setModelType] = useState<'openai' | 'gemini' | 'pixelmatch'>('openai');
+  const [diffImage, setDiffImage] = useState<string | null>(null);
 
   const compareImages = async () => {
     if (!screenshotPath || !uploadedImagePath) {
@@ -58,11 +60,22 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setDiffImage(null);
 
     try {
+      // Determine which endpoint to use based on model type
+      let endpoint = 'http://localhost:3001/api/compare';
+      
+      if (modelType === 'gemini') {
+        endpoint = 'http://localhost:3001/api/compare-with-gemini';
+      } else if (modelType === 'pixelmatch') {
+        endpoint = 'http://localhost:3001/api/compare-pixels';
+      }
+      
       // Call the comparison API
-        console.log({ screenshotPath, uploadedImagePath });
-      const response = await fetch('http://localhost:3001/api/compare', {
+      console.log({ screenshotPath, uploadedImagePath });
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -70,21 +83,33 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
         body: JSON.stringify({
           screenshotPath,
           uploadedImagePath,
+          threshold: 0.1 // Only used for pixelmatch
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to compare images');
-      }
-
       const data = await response.json();
-      console.log('Comparison API response:', data);
+      console.log(`${modelType.toUpperCase()} Comparison API response:`, data);
+      
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to compare images');
+      }
+      
+      if (data.success === false && data.comparison?.error === 'Image dimensions do not match') {
+        // Special handling for dimension mismatch
+        setError(`Image dimensions do not match. Screenshot: ${data.comparison.details.screenshot.width}x${data.comparison.details.screenshot.height}, Uploaded: ${data.comparison.details.uploaded.width}x${data.comparison.details.uploaded.height}`);
+        setResult(data.comparison);
+        return;
+      }
       
       if (data.success && data.comparison) {
         setResult(data.comparison);
+        
+        // Handle diff image if present
+        if (data.comparison.diffImage?.path) {
+          setDiffImage(data.comparison.diffImage.path);
+        }
       } else {
-        throw new Error('Invalid response from comparison API');
+        throw new Error(`Invalid response from ${modelType} comparison API`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
@@ -148,22 +173,58 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
                   className="comparison-image"
                 />
               </div>
+              {diffImage && (
+                <div className="image-item">
+                  <Text>Difference Map</Text>
+                  <img
+                    src={diffImage}
+                    alt="Diff"
+                    className="comparison-image"
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        <Box padding={"spacing.5"} width="60%" margin="auto">
-          <Button
-            // display={'block'}
-            //   margin='auto'
-            isFullWidth
-            isLoading={isLoading}
-            onClick={compareImages}
-            isDisabled={isLoading || !screenshotPath || !uploadedImagePath}
-            variant="primary"
-          >
-            {isLoading ? "Comparing..." : "Compare Images"}
-          </Button>
+        <Box display="flex" flexDirection="column" gap="spacing.3" padding="spacing.5">
+          <Box display="flex" gap="spacing.3">
+            <Button
+              onClick={compareImages}
+              isDisabled={isLoading || !screenshotPath || !uploadedImagePath}
+              variant="primary"
+            >
+              {isLoading ? 'Comparing...' : `Compare with ${modelType === 'openai' ? 'OpenAI' : modelType === 'gemini' ? 'Gemini' : 'Pixel Match'}`}
+            </Button>
+          </Box>
+          
+          <Box display="flex" gap="spacing.3" marginTop="spacing.3">
+            <Text size="small" weight="medium">Select comparison method:</Text>
+            <Button 
+              onClick={() => setModelType('openai')}
+              variant={modelType === 'openai' ? "primary" : "secondary"}
+              size="small"
+              isDisabled={isLoading}
+            >
+              OpenAI
+            </Button>
+            <Button 
+              onClick={() => setModelType('gemini')}
+              variant={modelType === 'gemini' ? "primary" : "secondary"}
+              size="small"
+              isDisabled={isLoading}
+            >
+              Gemini
+            </Button>
+            <Button 
+              onClick={() => setModelType('pixelmatch')}
+              variant={modelType === 'pixelmatch' ? "primary" : "secondary"}
+              size="small"
+              isDisabled={isLoading}
+            >
+              Pixel Match
+            </Button>
+          </Box>
         </Box>
 
         {error && (

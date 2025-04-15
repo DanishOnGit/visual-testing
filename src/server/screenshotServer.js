@@ -7,7 +7,12 @@ import cors from "cors";
 import multer from "multer";
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import pixelmatch from 'pixelmatch';
+import { PNG } from 'pngjs';
+import sharp from 'sharp';
 
+// Initialize the Gemini API
 // Load environment variables
 dotenv.config();
 
@@ -15,6 +20,7 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const genAI = new GoogleGenerativeAI(process.env.VITE_GEMINI_API_KEY);
 // Initialize OpenAI with Azure OpenAI configuration
 const openai = new OpenAI({
   apiKey: process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
@@ -254,6 +260,304 @@ app.post("/api/compare", async (req, res) => {
     res.status(500).json({
       error: 'Failed to compare images',
       message: error.message
+    });
+  }
+});
+
+// Image comparison with Gemini endpoint
+app.post("/api/compare-with-gemini", async (req, res) => {
+  const { screenshotPath, uploadedImagePath } = req.body;
+  
+  console.log('Gemini Compare API called with:', { screenshotPath, uploadedImagePath });
+  
+  if (!screenshotPath || !uploadedImagePath) {
+    return res.status(400).json({ error: 'Both screenshot and uploaded image paths are required' });
+  }
+  
+  // Convert relative paths to absolute if needed
+  const fullScreenshotPath = screenshotPath.startsWith('/') 
+    ? screenshotPath
+    : path.join(__dirname, '..', '..', screenshotPath.slice(1));
+    
+  const fullUploadedImagePath = uploadedImagePath.startsWith('/') 
+    ? uploadedImagePath
+    : path.join(__dirname, '..', '..', uploadedImagePath.slice(1));
+
+  console.log('Full paths:', { fullScreenshotPath, fullUploadedImagePath });
+
+  try {
+    // Check if files exist
+    if (!fs.existsSync(fullScreenshotPath)) {
+      console.error('Screenshot file not found:', fullScreenshotPath);
+      return res.status(404).json({ error: 'Screenshot file not found' });
+    }
+    
+    if (!fs.existsSync(fullUploadedImagePath)) {
+      console.error('Uploaded image file not found:', fullUploadedImagePath);
+      return res.status(404).json({ error: 'Uploaded image file not found' });
+    }
+    
+    // Read image files
+    const screenshotBuffer = await fs.promises.readFile(fullScreenshotPath);
+    const uploadedImageBuffer = await fs.promises.readFile(fullUploadedImagePath);
+    
+    // Initialize Gemini model
+    const geminiModel = genAI.getGenerativeModel({
+      model: "gemini-2.5-pro-exp-03-25",
+    });
+    
+    // Create Gemini parts - instructions and images
+    const prompt = "Compare these two images. The first is a reference screenshot and the second is a test image. Provide a similarity score from 0 to 100, where 100 means identical. Analyze layout differences, color variations, and missing elements. Return a JSON with: score (number), analysis (string), and differences (array of strings). Additionally, evaluate and provide specific scores for these parameters: typography (0-100), layoutAlignment (0-100), visualStyling (0-100), copy (0-100). For each parameter, include a brief explanation in a 'parameterAnalysis' object.";
+
+    // Create image parts for Gemini
+    const imageParts = [
+      {
+        inlineData: {
+          data: screenshotBuffer.toString("base64"),
+          mimeType: "image/png",
+        },
+      },
+      {
+        inlineData: {
+          data: uploadedImageBuffer.toString("base64"),
+          mimeType: "image/png",
+        },
+      },
+    ];
+
+    // Construct the request
+    const result = await geminiModel.generateContent([prompt, ...imageParts]);
+    const response = result.response;
+    const text = response.text();
+    
+    console.log('Gemini raw response:', text);
+    
+    // Parse the JSON from the response text
+    // Note: Gemini might not always return clean JSON, so we need to handle potential formatting issues
+    let jsonResponse;
+    try {
+      // Try to extract JSON if it's wrapped in backticks or not in proper format
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || 
+                       text.match(/```\s*([\s\S]*?)\s*```/) ||
+                       text.match(/{[\s\S]*}/);
+                       
+      const jsonString = jsonMatch ? jsonMatch[1] || jsonMatch[0] : text;
+      jsonResponse = JSON.parse(jsonString.replace(/^```json/, '').replace(/```$/, ''));
+    } catch (parseError) {
+      console.error('Failed to parse Gemini response as JSON:', parseError);
+      console.log('Raw text received:', text);
+      // Create a basic structure if parsing fails
+      jsonResponse = {
+        score: 0,
+        analysis: "Error parsing response: " + parseError.message,
+        differences: ["Failed to analyze images properly"],
+      };
+    }
+
+    // Ensure all required properties exist
+    const formattedResponse = {
+      score: jsonResponse.score || 0,
+      analysis: jsonResponse.analysis || 'No analysis provided',
+      differences: jsonResponse.differences || [],
+      parameters: {
+        typography: jsonResponse.typography || 0,
+        layoutAlignment: jsonResponse.layoutAlignment || 0,
+        visualStyling: jsonResponse.visualStyling || 0,
+        copy: jsonResponse.copy || 0
+      },
+      parameterAnalysis: {
+        typography: jsonResponse.parameterAnalysis?.typography || { score: 0, explanation: 'No analysis' },
+        layoutAlignment: jsonResponse.parameterAnalysis?.layoutAlignment || { score: 0, explanation: 'No analysis' },
+        visualStyling: jsonResponse.parameterAnalysis?.visualStyling || { score: 0, explanation: 'No analysis' },
+        copy: jsonResponse.parameterAnalysis?.copy || { score: 0, explanation: 'No analysis' }
+      }
+    };
+
+    res.json({
+      success: true,
+      comparison: formattedResponse
+    });
+
+  } catch (err) {
+    console.error('Gemini comparison error:', err);
+    res.status(500).json({
+      error: 'Failed to compare images using Gemini',
+      message: err.message
+    });
+  }
+});
+
+// Pixel level image comparison endpoint
+app.post("/api/compare-pixels", async (req, res) => {
+  const { screenshotPath, uploadedImagePath, threshold = 0.1 } = req.body;
+  
+  console.log('Pixel Compare API called with:', { screenshotPath, uploadedImagePath, threshold });
+  
+  if (!screenshotPath || !uploadedImagePath) {
+    return res.status(400).json({ error: 'Both screenshot and uploaded image paths are required' });
+  }
+  
+  // Convert relative paths to absolute if needed
+  const fullScreenshotPath = screenshotPath.startsWith('/') 
+    ? screenshotPath
+    : path.join(__dirname, '..', '..', screenshotPath.slice(1));
+    
+  const fullUploadedImagePath = uploadedImagePath.startsWith('/') 
+    ? uploadedImagePath
+    : path.join(__dirname, '..', '..', uploadedImagePath.slice(1));
+
+  console.log('Full paths:', { fullScreenshotPath, fullUploadedImagePath });
+
+  try {
+    // Check if files exist
+    if (!fs.existsSync(fullScreenshotPath)) {
+      console.error('Screenshot file not found:', fullScreenshotPath);
+      return res.status(404).json({ error: 'Screenshot file not found' });
+    }
+    
+    if (!fs.existsSync(fullUploadedImagePath)) {
+      console.error('Uploaded image file not found:', fullUploadedImagePath);
+      return res.status(404).json({ error: 'Uploaded image file not found' });
+    }
+    
+    // Read files and get dimensions
+    const [screenshotDimensions, uploadedDimensions] = await Promise.all([
+      sharp(fullScreenshotPath).metadata(),
+      sharp(fullUploadedImagePath).metadata()
+    ]);
+    
+    let screenshotPNG, uploadedPNG;
+    
+    // Check if dimensions match
+    if (screenshotDimensions.width !== uploadedDimensions.width || screenshotDimensions.height !== uploadedDimensions.height) {
+      console.log('Image dimensions do not match, resizing...');
+      console.log(`Screenshot: ${screenshotDimensions.width}x${screenshotDimensions.height}, Uploaded: ${uploadedDimensions.width}x${uploadedDimensions.height}`);
+      
+      // Resize the uploaded image to match the screenshot dimensions
+      const resizedImageBuffer = await sharp(fullUploadedImagePath)
+        .resize(screenshotDimensions.width, screenshotDimensions.height, {
+          fit: 'fill'
+        })
+        .png()
+        .toBuffer();
+      
+      // Convert both images to PNG format
+      const screenshotBuffer = await sharp(fullScreenshotPath).png().toBuffer();
+      
+      // Save the resized image temporarily for debugging
+      const resizedFileName = `resized-${Date.now()}.png`;
+      const resizedFilePath = path.join(screenshotsDir, resizedFileName);
+      await fs.promises.writeFile(resizedFilePath, resizedImageBuffer);
+      
+      console.log(`Resized image saved at ${resizedFilePath}`);
+      
+      // Convert buffers to PNG objects
+      screenshotPNG = PNG.sync.read(screenshotBuffer);
+      uploadedPNG = PNG.sync.read(resizedImageBuffer);
+    } else {
+      // If dimensions already match, just read as PNG
+      screenshotPNG = PNG.sync.read(fs.readFileSync(fullScreenshotPath));
+      uploadedPNG = PNG.sync.read(fs.readFileSync(fullUploadedImagePath));
+    }
+    
+    // Create a new PNG for the diff
+    const { width, height } = screenshotPNG;
+    const diffImage = new PNG({ width, height });
+    
+    // Generate comparison parameters
+    let comparisonOptions = {
+      threshold: parseFloat(threshold),
+      includeAA: true,
+      alpha: 0.1,
+      diffMask: true
+    };
+    
+    // Compare images
+    console.log(`Comparing images with dimensions: ${width}x${height}`);
+    const numDiffPixels = pixelmatch(
+      screenshotPNG.data,
+      uploadedPNG.data,
+      diffImage.data,
+      width,
+      height,
+      comparisonOptions
+    );
+    
+    // Calculate percentage of different pixels
+    const totalPixels = width * height;
+    const diffPercentage = (numDiffPixels / totalPixels) * 100;
+    const matchPercentage = 100 - diffPercentage;
+    
+    console.log(`Diff pixels: ${numDiffPixels}, Total pixels: ${totalPixels}`);
+    console.log(`Match percentage: ${matchPercentage.toFixed(2)}%`);
+    
+    // Save diff image
+    const diffFileName = `diff-${Date.now()}.png`;
+    const diffFilePath = path.join(screenshotsDir, diffFileName);
+    fs.writeFileSync(diffFilePath, PNG.sync.write(diffImage));
+    
+    // Generate structured response
+    const diffAreas = [];
+    
+    // Basic pixel diff analysis - identify regions with differences
+    // In a real implementation, this would be more sophisticated
+    if (numDiffPixels > 0) {
+      diffAreas.push("There are visual differences between the images");
+      
+      // Simple heuristics for typography differences
+      if (numDiffPixels < totalPixels * 0.05) {
+        diffAreas.push("Minor text or typography differences detected");
+      } else if (numDiffPixels < totalPixels * 0.15) {
+        diffAreas.push("Layout or alignment differences detected");
+      } else {
+        diffAreas.push("Major structural differences detected");
+      }
+    }
+    
+    // Prepare the response
+    const result = {
+      score: parseFloat(matchPercentage.toFixed(2)),
+      analysis: `Images match at ${matchPercentage.toFixed(2)}% with ${numDiffPixels} different pixels out of ${totalPixels} total pixels.`,
+      differences: diffAreas,
+      parameters: {
+        typography: matchPercentage > 95 ? 95 : matchPercentage,
+        layoutAlignment: matchPercentage > 90 ? 90 : matchPercentage,
+        visualStyling: matchPercentage,
+        copy: matchPercentage > 95 ? 98 : matchPercentage
+      },
+      parameterAnalysis: {
+        typography: { 
+          score: matchPercentage > 95 ? 95 : matchPercentage, 
+          explanation: "Based on pixel-level differences that may affect text rendering"
+        },
+        layoutAlignment: { 
+          score: matchPercentage > 90 ? 90 : matchPercentage, 
+          explanation: "Based on structural similarities between the images"
+        },
+        visualStyling: { 
+          score: matchPercentage, 
+          explanation: "Direct measurement of visual differences"
+        },
+        copy: { 
+          score: matchPercentage > 95 ? 98 : matchPercentage, 
+          explanation: "Estimated based on overall image similarity"
+        }
+      },
+      diffImage: {
+        path: `/screenshots/${diffFileName}`,
+        fullPath: diffFilePath
+      }
+    };
+    
+    res.json({
+      success: true,
+      comparison: result
+    });
+  } catch (err) {
+    console.error('Pixel comparison error:', err);
+    res.status(500).json({
+      error: 'Failed to compare images using pixel matching',
+      message: err.message
     });
   }
 });
