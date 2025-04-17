@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { Box, Text, Button } from '@razorpay/blade/components';
+import { Box, Text, Button, Modal, ModalBody, ModalHeader, Divider } from '@razorpay/blade/components';
+import ComparisonReport from './ComparisonReport';
 
 interface ImageComparisonProps {
   screenshotUrl?: string;
   screenshotPath?: string;
   uploadedImageUrl?: string;
   uploadedImagePath?: string;
+  imageComparisonOpen: boolean;
+  setImageComparisonOpen: (open: boolean) => void;
 }
 
 interface ParameterScores {
@@ -15,11 +18,15 @@ interface ParameterScores {
   copy: number;
 }
 
+interface ParameterAnalysisType{
+  score:number;
+  explanation:string;
+}
 interface ParameterAnalysis {
-  typography?: string;
-  layoutAlignment?: string;
-  visualStyling?: string;
-  copy?: string;
+  typography?: ParameterAnalysisType;
+  layoutAlignment?: ParameterAnalysisType;
+  visualStyling?: ParameterAnalysisType;
+  copy?: ParameterAnalysisType;
 }
 
 interface ComparisonResult {
@@ -35,10 +42,15 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
   screenshotPath,
   uploadedImageUrl,
   uploadedImagePath,
+  imageComparisonOpen,
+  setImageComparisonOpen,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ComparisonResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [modelType, setModelType] = useState<'openai' | 'gemini' | 'pixelmatch' | 'hybrid'>('openai');
+  const [diffImage, setDiffImage] = useState<string | null>(null);
+  const [aiModel, setAiModel] = useState<'openai' | 'gemini'>('gemini');
 
   const compareImages = async () => {
     if (!screenshotPath || !uploadedImagePath) {
@@ -49,32 +61,65 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setDiffImage(null);
 
     try {
+      // Determine which endpoint to use based on model type
+      let endpoint = 'http://localhost:3001/api/compare';
+      const body: {
+        screenshotPath: string;
+        uploadedImagePath: string;
+        threshold?: number;
+        aiModel?: 'openai' | 'gemini';
+      } = {
+        screenshotPath,
+        uploadedImagePath,
+      };
+      
+      if (modelType === 'gemini') {
+        endpoint = 'http://localhost:3001/api/compare-with-gemini';
+      } else if (modelType === 'pixelmatch') {
+        endpoint = 'http://localhost:3001/api/compare-pixels';
+        body.threshold = 0.1;
+      } else if (modelType === 'hybrid') {
+        endpoint = 'http://localhost:3001/api/compare-hybrid';
+        body.aiModel = aiModel;
+      }
+      
       // Call the comparison API
-      const response = await fetch('http://localhost:3001/api/compare', {
+      console.log({ endpoint, ...body });
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          screenshotPath,
-          uploadedImagePath,
-        }),
+        body: JSON.stringify(body),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to compare images');
-      }
-
       const data = await response.json();
-      console.log('Comparison API response:', data);
+      console.log(`${modelType.toUpperCase()} Comparison API response:`, data);
+      
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to compare images');
+      }
+      
+      if (data.success === false && data.comparison?.error === 'Image dimensions do not match') {
+        // Special handling for dimension mismatch
+        setError(`Image dimensions do not match. Screenshot: ${data.comparison.details.screenshot.width}x${data.comparison.details.screenshot.height}, Uploaded: ${data.comparison.details.uploaded.width}x${data.comparison.details.uploaded.height}`);
+        setResult(data.comparison);
+        return;
+      }
       
       if (data.success && data.comparison) {
         setResult(data.comparison);
+        
+        // Handle diff image if present
+        if (data.comparison.diffImage?.path) {
+          setDiffImage(data.comparison.diffImage.path);
+        }
       } else {
-        throw new Error('Invalid response from comparison API');
+        throw new Error(`Invalid response from ${modelType} comparison API`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
@@ -90,63 +135,145 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
     return 'red';
   };
   
-  const renderParameterScore = (name: string, score: number, analysis?: string) => (
+  const renderParameterScore = (name: string, score: number, analysis?: {score:number,explanation:string}) => (
     <div className="parameter-score" key={name}>
       <div className="parameter-header">
         <div className="parameter-name"><Text>{name}</Text></div>
-        <div className="parameter-value"><Text>{score}%</Text></div>
+        <div className="parameter-value"><Text>{analysis?.score}%</Text></div>
       </div>
       <div className="score-bar">
         <div 
           className="score-fill" 
           style={{ 
-            width: `${score}%`, 
-            backgroundColor: getScoreColor(score) 
+            width: `${analysis?.score}%`, 
+            backgroundColor: getScoreColor(analysis?.score || 0) 
           }}
         />
       </div>
       {analysis && (
-        <div className="parameter-analysis"><Text>{analysis}</Text></div>
+        <div className="parameter-analysis"><Text>{analysis.explanation}</Text></div>
       )}
     </div>
   );
 
   return (
-    <Box>
-      <Text>Compare Images</Text>
+    <Modal
+      isOpen={imageComparisonOpen}
+      onDismiss={() => setImageComparisonOpen(false)}
+      size="medium"
+    >
+      <ModalHeader title="Compare Images" />
+      <ModalBody>
+        <div className="comparison-images">
+          {screenshotUrl && uploadedImageUrl && (
+            <div className="image-grid">
+              <div className="image-item">
+                <Text>Screenshot</Text>
+                <img
+                  src={screenshotUrl}
+                  alt="Screenshot"
+                  className="comparison-image"
+                />
+              </div>
+              <div className="image-item">
+                <Text>Uploaded Image</Text>
+                <img
+                  src={uploadedImageUrl}
+                  alt="Uploaded"
+                  className="comparison-image"
+                />
+              </div>
+              {diffImage && (
+                <div className="image-item">
+                  <Text>Difference Map</Text>
+                  <img
+                    src={diffImage}
+                    alt="Diff"
+                    className="comparison-image"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-      <div className="comparison-images">
-        {screenshotUrl && uploadedImageUrl && (
-          <div className="image-grid">
-            <div className="image-item">
-              <Text>Screenshot</Text>
-              <img src={screenshotUrl} alt="Screenshot" className="comparison-image" />
-            </div>
-            <div className="image-item">
-              <Text>Uploaded Image</Text>
-              <img src={uploadedImageUrl} alt="Uploaded" className="comparison-image" />
-            </div>
+        <Box display="flex" flexDirection="column" gap="spacing.3" padding="spacing.5">
+          <Box display="flex" gap="spacing.3">
+            <Button
+              onClick={compareImages}
+              isDisabled={isLoading || !screenshotPath || !uploadedImagePath}
+              variant="primary"
+            >
+              {isLoading ? 'Comparing...' : `Compare with ${modelType === 'openai' ? 'OpenAI' : modelType === 'gemini' ? 'Gemini' : modelType === 'hybrid' ? 'Hybrid (AI + Pixel)' : 'Pixel Match'}`}
+            </Button>
+          </Box>
+          
+          <Box display="flex" gap="spacing.3" marginTop="spacing.3">
+            <Text size="small" weight="medium">Select comparison method:</Text>
+            <Button 
+              onClick={() => setModelType('openai')}
+              variant={modelType === 'openai' ? "primary" : "secondary"}
+              size="small"
+              isDisabled={isLoading}
+            >
+              OpenAI
+            </Button>
+            <Button 
+              onClick={() => setModelType('gemini')}
+              variant={modelType === 'gemini' ? "primary" : "secondary"}
+              size="small"
+              isDisabled={isLoading}
+            >
+              Gemini
+            </Button>
+            <Button 
+              onClick={() => setModelType('pixelmatch')}
+              variant={modelType === 'pixelmatch' ? "primary" : "secondary"}
+              size="small"
+              isDisabled={isLoading}
+            >
+              Pixel Match
+            </Button>
+            <Button 
+              onClick={() => setModelType('hybrid')}
+              variant={modelType === 'hybrid' ? "primary" : "secondary"}
+              size="small"
+              isDisabled={isLoading}
+            >
+              Hybrid
+            </Button>
+          </Box>
+
+          {modelType === 'hybrid' && (
+            <Box display="flex" gap="spacing.3" marginTop="spacing.3">
+              <Text size="small" weight="medium">AI Model for Hybrid:</Text>
+              <Button 
+                onClick={() => setAiModel('openai')}
+                variant={aiModel === 'openai' ? "primary" : "secondary"}
+                size="small"
+                isDisabled={isLoading}
+              >
+                OpenAI
+              </Button>
+              <Button 
+                onClick={() => setAiModel('gemini')}
+                variant={aiModel === 'gemini' ? "primary" : "secondary"}
+                size="small"
+                isDisabled={isLoading}
+              >
+                Gemini
+              </Button>
+            </Box>
+          )}
+        </Box>
+
+        {error && (
+          <div className="comparison-error">
+            <Text>{error}</Text>
           </div>
         )}
-      </div>
 
-      <div className="comparison-action">
-        <Button
-          onClick={compareImages}
-          isDisabled={isLoading || !screenshotPath || !uploadedImagePath}
-          variant="primary"
-        >
-          {isLoading ? 'Comparing...' : 'Compare Images'}
-        </Button>
-      </div>
-
-      {error && (
-        <div className="comparison-error">
-          <Text>{error}</Text>
-        </div>
-      )}
-
-      {result && (
+        {/* {result && (
         <div className="comparison-result">
           <div className="score-section">
             <div className="overall-score-title"><Text>Overall Similarity Score</Text></div>
@@ -193,8 +320,21 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
             </div>
           )}
         </div>
-      )}
-    </Box>
+      )} */}
+        <Divider height={"spacing.5"} />
+        {result && (
+          <Box padding={"spacing.5"}>
+            <ComparisonReport
+              score={result?.score || 0}
+              analysis={result?.analysis || ""}
+              differences={result?.differences || []}
+              parameters={result?.parameters}
+              parameterAnalysis={result?.parameterAnalysis}
+            />
+          </Box>
+        )}
+      </ModalBody>
+    </Modal>
   );
 };
 
