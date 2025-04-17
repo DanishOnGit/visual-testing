@@ -12,8 +12,6 @@ import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import sharp from 'sharp';
 
-// Initialize the Gemini API
-// Load environment variables
 dotenv.config();
 
 // ES modules fix for __dirname
@@ -21,7 +19,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const genAI = new GoogleGenerativeAI(process.env.VITE_GEMINI_API_KEY);
-// Initialize OpenAI with Azure OpenAI configuration
+
 const openai = new OpenAI({
   apiKey: process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
   baseURL: process.env.VITE_OPENAI_BASE_URL,
@@ -36,7 +34,6 @@ const openai = new OpenAI({
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Enable CORS and JSON parsing
 app.use(cors());
 app.use(express.json());
 
@@ -91,7 +88,6 @@ app.post("/api/screenshot", async (req, res) => {
     const page = await browser.newPage();
     await page.setViewport({ width, height });
 
-    // Navigate to URL
     await page.goto(url, {
       waitUntil: "networkidle2",
       timeout: 30000,
@@ -105,7 +101,6 @@ app.post("/api/screenshot", async (req, res) => {
     const fileName = `${urlSlug}-${timestamp}.png`;
     const filePath = path.join(screenshotsDir, fileName);
 
-    // Take screenshot
     await page.screenshot({
       path: filePath,
      clip:{
@@ -116,7 +111,6 @@ app.post("/api/screenshot", async (req, res) => {
      }
     });
 
-    // Return success with file info
     res.json({
       success: true,
       file: {
@@ -177,7 +171,7 @@ app.post("/api/compare", async (req, res) => {
   console.log('Full paths:', { fullScreenshotPath, fullUploadedImagePath });
 
   try {
-    // Check if files exist
+
     if (!fs.existsSync(fullScreenshotPath)) {
       console.error('Screenshot file not found:', fullScreenshotPath);
       return res.status(404).json({ error: 'Screenshot file not found' });
@@ -195,12 +189,7 @@ app.post("/api/compare", async (req, res) => {
     const screenshotBase64 = screenshotBuffer.toString('base64');
     const uploadedImageBase64 = uploadedImageBuffer.toString('base64');
 
-    // Log API settings
-    console.log('Using OpenAI API with:');
-    console.log('- API Key:', process.env.VITE_OPENAI_API_KEY ? '[Using VITE_OPENAI_API_KEY]' : (process.env.OPENAI_API_KEY ? '[Using OPENAI_API_KEY]' : '[No API Key found]'));
-    console.log('- Base URL:', process.env.VITE_OPENAI_BASE_URL || '[Default OpenAI URL]');
 
-    // Send request to OpenAI
     const response = await openai.chat.completions.create({
       model: 'Proton',
       messages: [
@@ -235,7 +224,6 @@ app.post("/api/compare", async (req, res) => {
       response_format: { type: 'json_object' },
     });
 
-    // Parse the response
     const content = response.choices[0]?.message?.content || '';
     console.log('OpenAI Response:', content);
     const result = JSON.parse(content);
@@ -264,7 +252,6 @@ app.post("/api/compare", async (req, res) => {
   }
 });
 
-// Image comparison with Gemini endpoint
 app.post("/api/compare-with-gemini", async (req, res) => {
   const { screenshotPath, uploadedImagePath } = req.body;
   
@@ -286,7 +273,6 @@ app.post("/api/compare-with-gemini", async (req, res) => {
   console.log('Full paths:', { fullScreenshotPath, fullUploadedImagePath });
 
   try {
-    // Check if files exist
     if (!fs.existsSync(fullScreenshotPath)) {
       console.error('Screenshot file not found:', fullScreenshotPath);
       return res.status(404).json({ error: 'Screenshot file not found' });
@@ -297,19 +283,16 @@ app.post("/api/compare-with-gemini", async (req, res) => {
       return res.status(404).json({ error: 'Uploaded image file not found' });
     }
     
-    // Read image files
     const screenshotBuffer = await fs.promises.readFile(fullScreenshotPath);
     const uploadedImageBuffer = await fs.promises.readFile(fullUploadedImagePath);
     
-    // Initialize Gemini model
     const geminiModel = genAI.getGenerativeModel({
       model: "gemini-2.5-pro-exp-03-25",
     });
     
-    // Create Gemini parts - instructions and images
     const prompt = "Compare these two images. The first is a reference screenshot and the second is a test image. Provide a similarity score from 0 to 100, where 100 means identical. Analyze layout differences, color variations, and missing elements. Return a JSON with: score (number), analysis (string), and differences (array of strings). Additionally, evaluate and provide specific scores for these parameters: typography (0-100), layoutAlignment (0-100), visualStyling (0-100), copy (0-100). For each parameter, include a brief explanation in a 'parameterAnalysis' object.";
 
-    // Create image parts for Gemini
+
     const imageParts = [
       {
         inlineData: {
@@ -325,7 +308,7 @@ app.post("/api/compare-with-gemini", async (req, res) => {
       },
     ];
 
-    // Construct the request
+   
     const result = await geminiModel.generateContent([prompt, ...imageParts]);
     const response = result.response;
     const text = response.text();
@@ -354,7 +337,7 @@ app.post("/api/compare-with-gemini", async (req, res) => {
       };
     }
 
-    // Ensure all required properties exist
+
     const formattedResponse = {
       score: jsonResponse.score || 0,
       analysis: jsonResponse.analysis || 'No analysis provided',
@@ -409,7 +392,6 @@ app.post("/api/compare-pixels", async (req, res) => {
   console.log('Full paths:', { fullScreenshotPath, fullUploadedImagePath });
 
   try {
-    // Check if files exist
     if (!fs.existsSync(fullScreenshotPath)) {
       console.error('Screenshot file not found:', fullScreenshotPath);
       return res.status(404).json({ error: 'Screenshot file not found' });
@@ -496,15 +478,12 @@ app.post("/api/compare-pixels", async (req, res) => {
     const diffFilePath = path.join(screenshotsDir, diffFileName);
     fs.writeFileSync(diffFilePath, PNG.sync.write(diffImage));
     
-    // Generate structured response
     const diffAreas = [];
     
     // Basic pixel diff analysis - identify regions with differences
-    // In a real implementation, this would be more sophisticated
     if (numDiffPixels > 0) {
       diffAreas.push("There are visual differences between the images");
       
-      // Simple heuristics for typography differences
       if (numDiffPixels < totalPixels * 0.05) {
         diffAreas.push("Minor text or typography differences detected");
       } else if (numDiffPixels < totalPixels * 0.15) {
@@ -514,7 +493,6 @@ app.post("/api/compare-pixels", async (req, res) => {
       }
     }
     
-    // Prepare the response
     const result = {
       score: parseFloat(matchPercentage.toFixed(2)),
       analysis: `Images match at ${matchPercentage.toFixed(2)}% with ${numDiffPixels} different pixels out of ${totalPixels} total pixels.`,
@@ -572,7 +550,6 @@ app.post("/api/compare-hybrid", async (req, res) => {
     return res.status(400).json({ error: 'Both screenshot and uploaded image paths are required' });
   }
   
-  // Convert relative paths to absolute if needed
   const fullScreenshotPath = screenshotPath.startsWith('/') 
     ? screenshotPath
     : path.join(__dirname, '..', '..', screenshotPath.slice(1));
@@ -584,7 +561,6 @@ app.post("/api/compare-hybrid", async (req, res) => {
   console.log('Full paths:', { fullScreenshotPath, fullUploadedImagePath });
 
   try {
-    // Check if files exist
     if (!fs.existsSync(fullScreenshotPath)) {
       console.error('Screenshot file not found:', fullScreenshotPath);
       return res.status(404).json({ error: 'Screenshot file not found' });
@@ -711,7 +687,6 @@ app.post("/api/compare-hybrid", async (req, res) => {
   }
 });
 
-// Start server
 app.listen(port, () => {
   console.log(`Screenshot server running on port ${port}`);
 });
