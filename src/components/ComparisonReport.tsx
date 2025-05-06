@@ -31,6 +31,12 @@ interface ComparisonReportProps {
     visualStyling?: { score: number; explanation: string };
     copy?: { score: number; explanation: string };
   };
+  weights?: {
+    typography: number;
+    layout: number;
+    colors: number;
+    copy: number;
+  };
 }
 
 const ComparisonReport: React.FC<ComparisonReportProps> = ({
@@ -39,6 +45,7 @@ const ComparisonReport: React.FC<ComparisonReportProps> = ({
   differences,
   parameters,
   parameterAnalysis,
+  weights = { typography: 0.35, layout: 0.35, colors: 0.25, copy: 0.05 }
 }) => {
   const getScoreColor = (
     score: number
@@ -51,10 +58,9 @@ const ComparisonReport: React.FC<ComparisonReportProps> = ({
   return (
     <Box>
       <Heading
-        size="large"
+        size="medium"
         weight="semibold"
         color="surface.text.primary.normal"
-        marginBottom={"spacing.5"}
       >
         Test Summary
       </Heading>
@@ -66,7 +72,11 @@ const ComparisonReport: React.FC<ComparisonReportProps> = ({
               borderRadius="medium"
               backgroundColor="surface.background.gray.intense"
             >
-              <Heading size="large" weight="semibold">
+              <Heading
+                size="large"
+                weight="semibold"
+                color="surface.text.primary.normal"
+              >
                 {score}%
               </Heading>
               <Heading
@@ -79,210 +89,100 @@ const ComparisonReport: React.FC<ComparisonReportProps> = ({
             </Box>
           </CardBody>
         </Card>
+
+        {parameters && (
+          <Card>
+            <CardBody>
+              <Box
+                padding="spacing.5"
+                borderRadius="medium"
+                backgroundColor="surface.background.gray.intense"
+              >
+                <Heading
+                  size="small"
+                  weight="semibold"
+                  color="surface.text.primary.normal"
+                  marginBottom="spacing.3"
+                >
+                  Parameter Scores
+                </Heading>
+                <Box marginBottom="spacing.3">
+                  <Text size="small">Layout & Alignment : {parameterAnalysis?.layoutAlignment?.score || parameters?.layoutAlignment}%</Text>
+                  <ProgressBar
+                    value={parameterAnalysis?.layoutAlignment?.score || parameters?.layoutAlignment}
+                    max={100}
+                    color={getScoreColor(parameterAnalysis?.layoutAlignment?.score || parameters?.layoutAlignment || 0)}
+                    size="small"
+                    variant="meter"
+                  />
+                </Box>
+                <Box marginBottom="spacing.3">
+                  <Text size="small">Typography: {parameterAnalysis?.typography?.score || parameters?.typography}%</Text>
+                  <ProgressBar
+                    value={parameterAnalysis?.typography?.score || parameters?.typography}
+                    max={100}
+                    color={getScoreColor(parameterAnalysis?.typography?.score || parameters?.typography || 0)}
+                    size="small"
+                    variant="meter"
+                  />
+                </Box>
+                <Box marginBottom="spacing.3">
+                  <Text size="small">Visual Styling: {parameterAnalysis?.visualStyling?.score || parameters?.visualStyling}%</Text>
+                  <ProgressBar
+                    value={parameterAnalysis?.visualStyling?.score || parameters?.visualStyling}
+                    max={100}
+                    color={getScoreColor(parameterAnalysis?.visualStyling?.score || parameters?.visualStyling || 0)}
+                    size="small"
+                    variant="meter"
+                  />
+                </Box>
+                <Box marginBottom="spacing.3">
+                  <Text size="small">Content/Copy : {parameterAnalysis?.copy?.score || parameters?.copy}%</Text>
+                  <ProgressBar
+                    value={parameterAnalysis?.copy?.score || parameters?.copy}
+                    max={100}
+                    color={getScoreColor(parameterAnalysis?.copy?.score || parameters?.copy || 0)}
+                    size="small"
+                    variant="meter"
+                  />
+                </Box>
+              </Box>
+            </CardBody>
+          </Card>
+        )}
       </Box>
-      <Box padding="spacing.5" paddingLeft="spacing.0" paddingRight="spacing.0">
-        {/* <Box
-          marginBottom={"spacing.5"}
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-        >
-          <Box display="flex" gap="spacing.3">
-            <Button variant="secondary" size="small">
-              <Box display="flex" alignItems="center">
-                <RadioGroup>
-                  <Radio size="small" value="typography" />
-                </RadioGroup>
-                <Text marginLeft="spacing.2">Typography</Text>
-                <Counter
-                  value={
-                    differences.filter((d) =>
-                      d.toLowerCase().includes("typography")
-                    ).length || 0
-                  }
-                  color="primary"
-                  size="small"
-                  emphasis="subtle"
-                  marginLeft="spacing.2"
-                />
-              </Box>
-            </Button>
-            <Button variant="secondary" size="small">
-              <Box display="flex" alignItems="center">
-                <RadioGroup>
-                  <Radio size="small" value="layout" />
-                </RadioGroup>
-                <Text marginLeft="spacing.2">Layout & alignment</Text>
-                <Counter
-                  value={
-                    differences.filter(
-                      (d) =>
-                        d.toLowerCase().includes("layout") ||
-                        d.toLowerCase().includes("alignment")
-                    ).length || 0
-                  }
-                  color="primary"
-                  size="small"
-                  emphasis="subtle"
-                  marginLeft="spacing.2"
-                />
-              </Box>
-            </Button>
-            <Button variant="secondary" size="small">
-              <Box display="flex" alignItems="center">
-                <RadioGroup>
-                  <Radio size="small" value="responsiveness" />
-                </RadioGroup>
-                <Text marginLeft="spacing.2">Responsiveness</Text>
-                <Counter
-                  value={
-                    differences.filter((d) =>
-                      d.toLowerCase().includes("responsive")
-                    ).length || 0
-                  }
-                  color="primary"
-                  size="small"
-                  emphasis="subtle"
-                  marginLeft="spacing.2"
-                />
-              </Box>
-            </Button>
-          </Box>
-        </Box> */}
-        <Box display={"grid"} gridTemplateColumns={"1fr 1fr"} gap={"spacing.3"}>
-          <Card>
-            <CardBody>
-              <Text marginBottom={"spacing.3"} weight="semibold">
-                Typography
-              </Text>
-              <Box>
-                <ProgressBar
-                  label=""
-                  value={
-                    parameterAnalysis?.typography?.score ||
-                    parameters?.typography
-                  }
-                  max={100}
-                  color={getScoreColor(
-                    parameterAnalysis?.typography?.score ||
-                      parameters?.typography ||
-                      0
-                  )}
-                  size="medium"
-                  variant="meter"
-                  marginBottom={"spacing.5"}
-                />
-                {parameterAnalysis?.typography?.explanation && (
-                  <Text
-                    size="small"
-                    color="surface.text.gray.subtle"
-                    marginTop="spacing.3"
-                  >
-                    {parameterAnalysis.typography.explanation}
-                  </Text>
-                )}
-              </Box>
-            </CardBody>
-          </Card>
-          <Card>
-            <CardBody>
-              <Text marginBottom={"spacing.3"} weight="semibold">
-                Layout & alignment
-              </Text>
-              <Box>
-                <ProgressBar
-                  label=""
-                  value={
-                    parameterAnalysis?.layoutAlignment?.score ||
-                    parameters?.layoutAlignment
-                  }
-                  max={100}
-                  color={getScoreColor(
-                    parameterAnalysis?.layoutAlignment?.score ||
-                      parameters?.layoutAlignment ||
-                      0
-                  )}
-                  size="medium"
-                  variant="meter"
-                  marginBottom={"spacing.5"}
-                />
-                {parameterAnalysis?.layoutAlignment?.explanation && (
-                  <Text
-                    size="small"
-                    color="surface.text.gray.subtle"
-                    marginTop="spacing.3"
-                  >
-                    {parameterAnalysis.layoutAlignment.explanation}
-                  </Text>
-                )}
-              </Box>
-            </CardBody>
-          </Card>
-          <Card>
-            <CardBody>
-              <Text marginBottom={"spacing.3"} weight="semibold">
-                Visual Styling
-              </Text>
-              <Box>
-                <ProgressBar
-                  label=""
-                  value={
-                    parameterAnalysis?.visualStyling?.score ||
-                    parameters?.visualStyling
-                  }
-                  max={100}
-                  color={getScoreColor(
-                    parameterAnalysis?.visualStyling?.score ||
-                      parameters?.visualStyling ||
-                      0
-                  )}
-                  size="medium"
-                  variant="meter"
-                  marginBottom={"spacing.5"}
-                />
-                {parameterAnalysis?.visualStyling?.explanation && (
-                  <Text
-                    size="small"
-                    color="surface.text.gray.subtle"
-                    marginTop="spacing.3"
-                  >
-                    {parameterAnalysis.visualStyling.explanation}
-                  </Text>
-                )}
-              </Box>
-            </CardBody>
-          </Card>
-          <Card borderRadius="large">
-            <CardBody>
-              <Text marginBottom={"spacing.3"} weight="semibold">
-                Copy
-              </Text>
-              <Box>
-                <ProgressBar
-                  label=""
-                  value={parameterAnalysis?.copy?.score || parameters?.copy}
-                  max={100}
-                  color={getScoreColor(
-                    parameterAnalysis?.copy?.score || parameters?.copy || 0
-                  )}
-                  size="medium"
-                  variant="meter"
-                  marginBottom={"spacing.5"}
-                />
-                {parameterAnalysis?.copy?.explanation && (
-                  <Text
-                    size="small"
-                    color="surface.text.gray.subtle"
-                    marginTop="spacing.3"
-                  >
-                    {parameterAnalysis.copy.explanation}
-                  </Text>
-                )}
-              </Box>
-            </CardBody>
-          </Card>
+{/* 
+      {analysis && (
+        <Box padding="spacing.5">
+          <Heading
+            size="small"
+            weight="semibold"
+            color="surface.text.primary.normal"
+            marginBottom="spacing.3"
+          >
+            Analysis
+          </Heading>
+          <Text>{analysis}</Text>
         </Box>
-      </Box>
+      )} */}
+
+      {differences && differences.length > 0 && (
+        <Box padding="spacing.5">
+          <Heading
+            size="small"
+            weight="semibold"
+            color="surface.text.primary.normal"
+            marginBottom="spacing.3"
+          >
+            Detected Differences
+          </Heading>
+          {differences.map((diff, index) => (
+            <Box key={index} marginBottom="spacing.2">
+              <Text>• {diff}</Text>
+            </Box>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 };

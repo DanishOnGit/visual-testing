@@ -35,6 +35,12 @@ interface ComparisonResult {
   differences: string[];
   parameters?: ParameterScores;
   parameterAnalysis?: ParameterAnalysis;
+  weights?: {
+    typography: number;
+    layout: number;
+    colors: number;
+    copy: number;
+  };
 }
 
 const ImageComparison: React.FC<ImageComparisonProps> = ({
@@ -330,6 +336,12 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({
               differences={result?.differences || []}
               parameters={result?.parameters}
               parameterAnalysis={result?.parameterAnalysis}
+              weights={result?.weights || {
+                typography: 0.35,
+                layout: 0.35,
+                colors: 0.25,
+                copy: 0.05
+              }}
             />
           </Box>
         )}

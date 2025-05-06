@@ -644,18 +644,46 @@ app.post("/api/compare-hybrid", async (req, res) => {
     const pixelResults = pixelData.comparison;
     const aiResults = aiData.comparison;
     
-    // Calculate hybrid score (weighted average)
-    const layoutWeight = 0.4;
-    const typographyWeight = 0.2;
-    const colorsWeight = 0.2;
-    const copyWeight = 0.2;
+    // Define weights for each parameter
+    const weights = {
+      typography: 0.35,
+      layout: 0.35,
+      colors: 0.25,
+      copy: 0.05
+    };
     
-    const hybridScore = (
-      (pixelResults.parameters.layoutAlignment * layoutWeight) +
-      (aiResults.parameters.typography * typographyWeight) +
-      (aiResults.parameters.visualStyling * colorsWeight) +
-      (aiResults.parameters.copy * copyWeight)
-    );
+    // Create combined parameter analysis
+    const combinedParameterAnalysis = {
+      layoutAlignment: pixelResults.parameterAnalysis.layoutAlignment,
+      typography: aiResults.parameterAnalysis.typography, 
+      visualStyling: aiResults.parameterAnalysis.visualStyling,
+      copy: aiResults.parameterAnalysis.copy
+    };
+    
+    // Get scores from parameter analysis
+    const scores = {
+      typography: combinedParameterAnalysis.typography.score,
+      layout: combinedParameterAnalysis.layoutAlignment.score,
+      colors: combinedParameterAnalysis.visualStyling.score,
+      copy: combinedParameterAnalysis.copy.score
+    };
+    
+    // Calculate hybrid score based on weighted parameter scores
+    const hybridScore = 
+      scores.typography * weights.typography +
+      scores.layout * weights.layout +
+      scores.colors * weights.colors +
+      scores.copy * weights.copy;
+    
+    console.log('Score calculation:', { 
+      scores,
+      weights,
+      typographyComponent: scores.typography * weights.typography,
+      layoutComponent: scores.layout * weights.layout,
+      colorsComponent: scores.colors * weights.colors,
+      copyComponent: scores.copy * weights.copy,
+      totalScore: hybridScore
+    });
     
     // Combine differences from both analyses
     const allDifferences = [
@@ -667,12 +695,16 @@ app.post("/api/compare-hybrid", async (req, res) => {
     
     // Create combined analysis
     const hybridAnalysis = `
-      Layout Analysis: ${pixelResults.analysis}
+      Layout Analysis (${Math.round(scores.layout)}%): ${combinedParameterAnalysis.layoutAlignment.explanation}
       
-      AI Analysis: ${aiResults.analysis}
+      Typography Analysis (${Math.round(scores.typography)}%): ${combinedParameterAnalysis.typography.explanation}
       
-      Combined Score: ${Math.round(hybridScore)}% match. This score gives more weight to layout and alignment 
-      while utilizing AI to better evaluate typography, visual styling, and content.
+      Visual Styling Analysis (${Math.round(scores.colors)}%): ${combinedParameterAnalysis.visualStyling.explanation}
+      
+      Content/Copy Analysis (${Math.round(scores.copy)}%): ${combinedParameterAnalysis.copy.explanation}
+      
+      Combined Score: ${Math.round(hybridScore)}% match. This score weights typography (35%), 
+      layout & alignment (35%), visual styling (25%), and content (5%).
     `;
     
     // Create the combined response
@@ -681,21 +713,16 @@ app.post("/api/compare-hybrid", async (req, res) => {
       analysis: hybridAnalysis.trim(),
       differences: allDifferences,
       parameters: {
-        // Use pixel comparison for layout
-        layoutAlignment: pixelResults.parameters.layoutAlignment,
-        // Use AI for typography, styling and copy
-        typography: aiResults.parameters.typography,
-        visualStyling: aiResults.parameters.visualStyling,
-        copy: aiResults.parameters.copy
+        typography: scores.typography,
+        layoutAlignment: scores.layout,
+        visualStyling: scores.colors,
+        copy: scores.copy
       },
-      parameterAnalysis: {
-        layoutAlignment: pixelResults.parameterAnalysis.layoutAlignment,
-        typography: aiResults.parameterAnalysis.typography, 
-        visualStyling: aiResults.parameterAnalysis.visualStyling,
-        copy: aiResults.parameterAnalysis.copy
-      },
+      parameterAnalysis: combinedParameterAnalysis,
       // Include the diff image from pixel comparison
-      diffImage: pixelResults.diffImage
+      diffImage: pixelResults.diffImage,
+      // Include the weights used for calculation
+      weights: weights
     };
     
     res.json({
